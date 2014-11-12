@@ -62,7 +62,7 @@ fi
 
 if [ $# -lt 3 ]; then
 	echo "usage: $0 source identity -p provisioning [-e entitlements] [-d displayName] -b bundleId outputIpa" >&2
-	echo "\t\t -p and -b are optional, but their use is heavly recommonded" >&2
+	echo "       -p and -b are optional, but their use is heavly recommended" >&2
 	exit 1
 fi
 
