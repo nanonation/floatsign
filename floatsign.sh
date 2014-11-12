@@ -72,7 +72,7 @@ NEW_PROVISION=
 ENTITLEMENTS=
 BUNDLE_IDENTIFIER=""
 DISPLAY_NAME=""
-PROVISIONING_PROFILE_PREFIX=""
+APP_IDENTIFER_PREFIX=""
 TEAM_IDENTIFIER=""
 KEYCHAIN=""
 TEMP_DIR="_floatsignTemp"
@@ -115,6 +115,12 @@ done
 shift $((OPTIND-1))
 
 NEW_FILE="$1"
+if [ -z "$NEW_FILE" ]; 
+then
+	echo "Output file name required" >&2
+	exit 1
+fi
+
 
 # Check for and remove the temporary directory if it already exists
 if [ -d "$TEMP_DIR" ]; 
@@ -170,7 +176,8 @@ then
 	checkStatus
 fi
 
-echo "Bundle Identifier is ${BUNDLE_IDENTIFIER}" >&2
+echo "Current Bundle Identifier is $CURRENT_BUNDLE_IDENTIFIER" >&2
+echo "Bundle Identifier will be ${BUNDLE_IDENTIFIER}" >&2
 
 
 # Update the CFBundleDisplayName property in the Info.plist if a new name has been provided
@@ -188,17 +195,38 @@ fi
 # Replace the embedded mobile provisioning profile
 if [ "$NEW_PROVISION" != "" ];
 then
-	echo "Adding the new provision: $NEW_PROVISION" >&2
-	ENTITLEMENTS_TEMP=`/usr/bin/codesign -d --entitlements - "$TEMP_DIR/Payload/$APP_NAME" |  sed -E -e '1d'`
-	if [ -n "$ENTITLEMENTS_TEMP" ]; then
-		echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>$ENTITLEMENTS_TEMP" > "$TEMP_DIR/newEntitlements"
+	if [[ -e "$NEW_PROVISION" ]];
+	then
+		echo "Adding the new provision: $NEW_PROVISION" >&2
+		ENTITLEMENTS_TEMP=`/usr/bin/codesign -d --entitlements - "$TEMP_DIR/Payload/$APP_NAME" |  sed -E -e '1d'`
+		if [ -n "$ENTITLEMENTS_TEMP" ]; then
+			echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>$ENTITLEMENTS_TEMP" > "$TEMP_DIR/newEntitlements"
+		fi
+		#	echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>`/usr/bin/codesign -d --entitlements - "$TEMP_DIR/Payload/$APP_NAME" |  sed -E -e '1d'`" > "$TEMP_DIR/newEntitlements"
+		cp "$NEW_PROVISION" "$TEMP_DIR/Payload/$APP_NAME/embedded.mobileprovision"
+		APP_IDENTIFER_PREFIX=`grep '<key>application-identifier</key>' "$TEMP_DIR/Payload/$APP_NAME/embedded.mobileprovision" -A 1 --binary-files=text | sed -E -e '/<key>/ d' -e 's/(^.*<string>)//' -e 's/([A-Z0-9]*)(.*)/\1/'`
+		checkStatus
+		TEAM_IDENTIFIER=`grep '<key>com.apple.developer.team-identifier</key>' "$TEMP_DIR/Payload/$APP_NAME/embedded.mobileprovision" -A 1 --binary-files=text | sed -E -e '/<key>/ d' -e 's/(^.*<string>)//' -e 's/([A-Z0-9]*)(.*)/\1/'`
+		checkStatus
+		if [ "$APP_IDENTIFER_PREFIX" == "" ];
+		then
+			echo "Failed to extract 'application-identifier' prefix from '$NEW_PROVISION'" >&2
+			exit 1;
+		fi
+		if [ "$TEAM_IDENTIFIER" == "" ];
+		then
+			echo "Failed to extract 'com.apple.developer.team-identifier' prefix from '$NEW_PROVISION'" >&2
+			exit 1;
+		fi
+		echo "New profile app identifier prefix is $APP_IDENTIFER_PREFIX" >&2
+		echo "New profile team identifier is $TEAM_IDENTIFIER" >&2
+	else
+		echo "Provisioning profile '$NEW_PROVISION' file does not exist" >&2
+		exit 1;
 	fi
-	#	echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>`/usr/bin/codesign -d --entitlements - "$TEMP_DIR/Payload/$APP_NAME" |  sed -E -e '1d'`" > "$TEMP_DIR/newEntitlements"
-	cp "$NEW_PROVISION" "$TEMP_DIR/Payload/$APP_NAME/embedded.mobileprovision"
-	PROVISIONING_PROFILE_PREFIX=`grep '<key>application-identifier</key>' "$TEMP_DIR/Payload/$APP_NAME/embedded.mobileprovision" -A 1 --binary-files=text | sed -E -e '/<key>/ d' -e 's/(^.*<string>)//' -e 's/([A-Z0-9]*)(.*)/\1/'`
-	checkStatus
-	TEAM_IDENTIFIER=`grep '<key>com.apple.developer.team-identifier</key>' "$TEMP_DIR/Payload/$APP_NAME/embedded.mobileprovision" -A 1 --binary-files=text | sed -E -e '/<key>/ d' -e 's/(^.*<string>)//' -e 's/([A-Z0-9]*)(.*)/\1/'`
-	checkStatus
+else
+	echo "-p 'xxxx.mobileprovision' argument is required" >&2
+	exit 1;
 fi
 
 
@@ -230,26 +258,53 @@ fi
 
 
 # Resign the application
-echo "Resigning application using certificate: $CERTIFICATE" >&2
 if [ "$ENTITLEMENTS" != "" ];
 then
+	# sanity check the 'application-identifier' is present in the provided entitlements and matches the provisioning profile value 
+	ENTITLEMENTS_APP_ID_PREFIX=`grep '<key>application-identifier</key>' "$ENTITLEMENTS" -A 1 --binary-files=text | sed -E -e '/<key>/ d' -e 's/(^.*<string>)//' -e 's/([A-Z0-9]*)(.*)/\1/'`
+	checkStatus
+	if [ -z ENTITLEMENTS_APP_ID_PREFIX ]; 
+	then
+		echo "Provided entitlements file is missing a value for the required 'application-identifier' key" >&2
+		exit 1;
+	elif [ "$ENTITLEMENTS_APP_ID_PREFIX" != "$APP_IDENTIFER_PREFIX" ]; 
+	then
+		echo "Provided entitlements file's 'application-identifier' prefix value '$ENTITLEMENTS_APP_ID_PREFIX' does not match the provided provisioning profile's value '$APP_IDENTIFER_PREFIX'" >&2
+		exit 1;
+	fi
+
+	# sanity check the 'com.apple.developer.team-identifier' is present in the provided entitlements and matches the provisioning profile value
+	ENTITLEMENTS_TEAM_IDENTIFIER=`grep '<key>com.apple.developer.team-identifier</key>' "$ENTITLEMENTS" -A 1 --binary-files=text | sed -E -e '/<key>/ d' -e 's/(^.*<string>)//' -e 's/([A-Z0-9]*)(.*)/\1/'`
+	checkStatus
+	if [ -z ENTITLEMENTS_TEAM_IDENTIFIER ]; 
+	then
+		echo "Provided entitlements file is missing a value for the required 'com.apple.developer.team-identifier' key" >&2
+		exit 1;
+	elif [ "$ENTITLEMENTS_TEAM_IDENTIFIER" != "$TEAM_IDENTIFIER" ]; 
+	then
+		echo "Provided entitlements file's 'com.apple.developer.team-identifier' '$ENTITLEMENTS_TEAM_IDENTIFIER' does not match the provided provisioning profile's value '$TEAM_IDENTIFIER'" >&2
+		exit 1;
+	fi
+
+	echo "Resigning application using certificate: $CERTIFICATE" >&2
 	echo "Using Entitlements: $ENTITLEMENTS" >&2
 	/usr/bin/codesign -f -s "$CERTIFICATE" --entitlements="$ENTITLEMENTS" "$TEMP_DIR/Payload/$APP_NAME"
 	checkStatus
 else
-	if [ "$PROVISIONING_PROFILE_PREFIX" != "" ] && [ -s "$TEMP_DIR/newEntitlements" ];
+	echo "Resigning application using certificate: $CERTIFICATE" >&2
+	if [ "$APP_IDENTIFER_PREFIX" != "" ] && [ -s "$TEMP_DIR/newEntitlements" ];
 	#if [ -s "$TEMP_DIR/newEntitlements" ];
 	then
-		echo "Using existing entitlements updated with bundle identifier: $PROVISIONING_PROFILE_PREFIX.$BUNDLE_IDENTIFIER" >&2
+		echo "Using existing entitlements updated with bundle identifier: $APP_IDENTIFER_PREFIX.$BUNDLE_IDENTIFIER" >&2
 		if [ "$TEAM_IDENTIFIER" != "" ];
 		then
 			echo "and team identifier: $TEAM_IDENTIFIER" >&2
 			PlistBuddy -c "Set :com.apple.developer.team-identifier ${TEAM_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
 			checkStatus
 		fi
-		PlistBuddy -c "Set :application-identifier ${PROVISIONING_PROFILE_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
+		PlistBuddy -c "Set :application-identifier ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
 		checkStatus
-		PlistBuddy -c "Set :keychain-access-groups:0 ${PROVISIONING_PROFILE_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
+		PlistBuddy -c "Set :keychain-access-groups:0 ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
 		checkStatus
 		plutil -lint "$TEMP_DIR/newEntitlements" > /dev/null
 		checkStatus
