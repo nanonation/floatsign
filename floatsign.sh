@@ -257,6 +257,7 @@ FRAMEWORKS_DIR="$TEMP_DIR/Payload/$APP_NAME/Frameworks"
 if [ -d "$FRAMEWORKS_DIR" ];
 then
 	if [ "$TEAM_IDENTIFIER" == "" ];
+	then
 		echo "ERROR: embedded frameworks detected, re-signing iOS 8 (or higher) applications wihout a team identifier in the certificate/profile does not work" >&2
 		exit 1;
 	fi
