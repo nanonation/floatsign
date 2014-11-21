@@ -61,7 +61,7 @@ fi
 }
 
 if [ $# -lt 3 ]; then
-	echo "usage: $0 source identity -p provisioning [-e entitlements] [-d displayName] -b bundleId outputIpa" >&2
+	echo "usage: $0 source identity -p provisioning [-e entitlements] [-d displayName] [-n version] -b bundleId outputIpa" >&2
 	echo "       -p and -b are optional, but their use is heavly recommended" >&2
 	exit 1
 fi
@@ -75,31 +75,36 @@ DISPLAY_NAME=""
 APP_IDENTIFER_PREFIX=""
 TEAM_IDENTIFIER=""
 KEYCHAIN=""
+VERSION_NUMBER=""
 TEMP_DIR="_floatsignTemp"
 
 # options start index
 OPTIND=3
-while getopts p:d:e:k:b: opt; do
+while getopts p:d:e:k:b:n: opt; do
 	case $opt in
 		p)
 			NEW_PROVISION="$OPTARG"
-			echo "Specified provisioning profile: $NEW_PROVISION" >&2
+			echo "Specified provisioning profile: '$NEW_PROVISION'" >&2
 			;;
 		d)
 			DISPLAY_NAME="$OPTARG"
-			echo "Specified display name: $DISPLAY_NAME" >&2
+			echo "Specified display name: '$DISPLAY_NAME'" >&2
 			;;
 		e)
 			ENTITLEMENTS="$OPTARG"
-			echo "Specified signing entitlements: $ENTITLEMENTS" >&2
+			echo "Specified signing entitlements: '$ENTITLEMENTS'" >&2
 			;;
 		b)
 			BUNDLE_IDENTIFIER="$OPTARG"
-			echo "Specified bundle identifier: $BUNDLE_IDENTIFIER " >&2
+			echo "Specified bundle identifier: '$BUNDLE_IDENTIFIER'" >&2
 			;;
 		k)
 			KEYCHAIN="$OPTARG"
-			echo "Specified Keychain to use: $KEYCHAIN " >&2
+			echo "Specified Keychain to use: '$KEYCHAIN'" >&2
+			;;
+		n)
+			VERSION_NUMBER="$OPTARG"
+			echo "Specified version to use: '$VERSION_NUMBER'" >&2
 			;;
 		\?)
 			echo "Invalid option: -$OPTARG" >&2
@@ -129,17 +134,21 @@ then
 	rm -Rf "$TEMP_DIR"
 fi
 
+filename=$(basename "$ORIGINAL_FILE")
+extension="${filename##*.}"
+filename="${filename%.*}"
+
 # Check if the supplied file is an ipa or an app file
-if [ "${ORIGINAL_FILE#*.}" = "ipa" ]
+if [ "${extension}" = "ipa" ]
 then
 	# Unzip the old ipa quietly
 	unzip -q "$ORIGINAL_FILE" -d $TEMP_DIR
 	checkStatus
-elif [ "${ORIGINAL_FILE#*.}" = "app" ]
+elif [ "${extension}" = "app" ]
 then
 	# Copy the app file into an ipa-like structure
 	mkdir -p "$TEMP_DIR/Payload"
-	cp -Rf "${ORIGINAL_FILE}" "$TEMP_DIR/Payload/${ORIGINAL_FILE}"
+	cp -Rf "${ORIGINAL_FILE}" "$TEMP_DIR/Payload/${filename}.app"
 	checkStatus
 else
 	echo "Error: Only can resign .app files and .ipa files." >&2
@@ -184,15 +193,15 @@ fi
 echo "Current bundle identifier is: '$CURRENT_BUNDLE_IDENTIFIER'" >&2
 echo "New bundle identifier will be: '$BUNDLE_IDENTIFIER'" >&2
 
-
 # Update the CFBundleDisplayName property in the Info.plist if a new name has been provided
 if [ "${DISPLAY_NAME}" != "" ];
 then
-	#echo "read Info.plist file" "$TEMP_DIR/Payload/$ORIGINAL_FILE/Info.plist" >&2
-	echo "Changing display name from '$CURRENT_NAME' to '$DISPLAY_NAME'" >&2
-	`PlistBuddy -c "Set :CFBundleDisplayName $DISPLAY_NAME" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+	if [ "${DISPLAY_NAME}" != "${CURRENT_NAME}" ];
+	then
+		echo "Changing display name from '$CURRENT_NAME' to '$DISPLAY_NAME'" >&2
+		`PlistBuddy -c "Set :CFBundleDisplayName $DISPLAY_NAME" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+	fi
 fi
-
 
 # Replace the embedded mobile provisioning profile
 if [ "$NEW_PROVISION" != "" ];
@@ -251,6 +260,17 @@ then
 	checkStatus
 fi
 
+# Update the version number properties in the Info.plist if a version number has been provided
+if [ "$VERSION_NUMBER" != "" ];
+then
+	CURRENT_VERSION_NUMBER=`PlistBuddy -c "Print :CFBundleVersion" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+	if [ "$VERSION_NUMBER" != "$CURRENT_VERSION_NUMBER" ];
+	then
+		echo "Updating the version from '$CURRENT_VERSION_NUMBER' to '$VERSION_NUMBER'" >&2
+		`PlistBuddy -c "Set :CFBundleVersion $VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+		`PlistBuddy -c "Set :CFBundleShortVersionString $VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+	fi
+fi
 
 # Check for and resign any embedded frameworks (new feature for iOS 8 and above apps)
 FRAMEWORKS_DIR="$TEMP_DIR/Payload/$APP_NAME/Frameworks"
