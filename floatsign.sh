@@ -61,8 +61,9 @@ fi
 }
 
 if [ $# -lt 3 ]; then
-	echo "usage: $0 source identity -p provisioning [-e entitlements] [-d displayName] [-n version] -b bundleId outputIpa" >&2
+	echo "usage: $0 source identity -p provisioning [-e entitlements] [-r adjustBetaReports] [-d displayName] [-n version] -b bundleId outputIpa" >&2
 	echo "       -p and -b are optional, but their use is heavly recommended" >&2
+	echo "       -r flag is ignored if used with -e" >&2
 	exit 1
 fi
 
@@ -76,11 +77,12 @@ APP_IDENTIFER_PREFIX=""
 TEAM_IDENTIFIER=""
 KEYCHAIN=""
 VERSION_NUMBER=""
+ADJUST_BETA_REPORTS_ACTIVE_FLAG="0"
 TEMP_DIR="_floatsignTemp"
 
 # options start index
 OPTIND=3
-while getopts p:d:e:k:b:n: opt; do
+while getopts p:d:e:k:b:r:n: opt; do
 	case $opt in
 		p)
 			NEW_PROVISION="$OPTARG"
@@ -105,6 +107,10 @@ while getopts p:d:e:k:b:n: opt; do
 		n)
 			VERSION_NUMBER="$OPTARG"
 			echo "Specified version to use: '$VERSION_NUMBER'" >&2
+			;;
+		r)
+			ADJUST_BETA_REPORTS_ACTIVE_FLAG="1"
+			echo "Enabled adjustment of beta-reports-active entitlements" >&2
 			;;
 		\?)
 			echo "Invalid option: -$OPTARG" >&2
@@ -351,6 +357,31 @@ else
 				PlistBuddy -c "Set :application-identifier ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
 				checkStatus
 				PlistBuddy -c "Set :keychain-access-groups:0 ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
+				checkStatus
+				if [[ "$CERTIFICATE" == *Distribution* ]]; then
+					echo "Assuming Distribution Identity"
+					if [ "$ADJUST_BETA_REPORTS_ACTIVE_FLAG" == "1" ]; then
+						echo "Ensuring beta-reports-active is present and enabled"
+						# new beta key is only used for Distribution; might not exist yet, if we were building Development
+						PlistBuddy -c "Add :beta-reports-active bool true" "$TEMP_DIR/newEntitlements"
+						if [ $? -ne 0 ]; then
+							PlistBuddy -c "Set :beta-reports-active YES" "$TEMP_DIR/newEntitlements"
+						fi
+						checkStatus
+					fi
+					echo "Setting get-task-allow entitlement to NO"
+					PlistBuddy -c "Set :get-task-allow NO" "$TEMP_DIR/newEntitlements"
+				else
+					echo "Assuming Development Identity"
+					if [ "$ADJUST_BETA_REPORTS_ACTIVE_FLAG" == "1" ]; then
+						# if we were building with Distribution profile, we have to delete the beta key
+						echo "Ensuring beta-reports-active is not included"
+						PlistBuddy -c "Delete :beta-reports-active" "$TEMP_DIR/newEntitlements"
+						# do not check status here, just let it fail if entry does not exist
+					fi
+					echo "Setting get-task-allow entitlement to YES"
+					PlistBuddy -c "Set :get-task-allow YES" "$TEMP_DIR/newEntitlements"
+				fi
 				checkStatus
 				plutil -lint "$TEMP_DIR/newEntitlements" > /dev/null
 				checkStatus
