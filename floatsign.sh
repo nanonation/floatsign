@@ -10,6 +10,7 @@
 # Extended by Patrick Blitz, April 2013
 #
 # Extended by John Turnipseed and Matthew Nespor, November 2014
+# http://nanonation.net/
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the "Software"),
@@ -63,7 +64,8 @@ fi
 if [ $# -lt 3 ]; then
 	echo "usage: $0 source identity -p provisioning [-e entitlements] [-r adjustBetaReports] [-d displayName] [-n version] -b bundleId outputIpa" >&2
 	echo "       -p and -b are optional, but their use is heavly recommended" >&2
-	echo "       -r flag is ignored if used with -e" >&2
+	echo "       -r flag requires a value '-r yes'"
+	echo "       -r flag is ignored if -e is also used" >&2
 	exit 1
 fi
 
@@ -357,7 +359,7 @@ else
 				PlistBuddy -c "Set :application-identifier ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
 				checkStatus
 				PlistBuddy -c "Set :keychain-access-groups:0 ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
-				checkStatus
+#				checkStatus  -- if this fails it's likely because the keychain-access-groups key does not exist, so we have nothing to update
 				if [[ "$CERTIFICATE" == *Distribution* ]]; then
 					echo "Assuming Distribution Identity"
 					if [ "$ADJUST_BETA_REPORTS_ACTIVE_FLAG" == "1" ]; then
