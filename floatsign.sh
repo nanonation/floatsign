@@ -1,4 +1,4 @@
-# !/bin/bash
+#!/bin/bash
 
 # Copyright (c) 2011 Float Mobile Learning
 # http://www.floatlearning.com/
@@ -49,7 +49,7 @@
 # 3. fixed bug in packaging if -e flag is used
 # 4. renamed 'temp' directory and made it a variable so it can be easily modified
 # 5. various code formatting and logging adjustments
-# 
+#
 
 
 function checkStatus {
@@ -128,7 +128,7 @@ done
 shift $((OPTIND-1))
 
 NEW_FILE="$1"
-if [ -z "$NEW_FILE" ]; 
+if [ -z "$NEW_FILE" ];
 then
 	echo "Output file name required" >&2
 	exit 1
@@ -136,7 +136,7 @@ fi
 
 
 # Check for and remove the temporary directory if it already exists
-if [ -d "$TEMP_DIR" ]; 
+if [ -d "$TEMP_DIR" ];
 then
 	echo "Removing previous temporary directory: '$TEMP_DIR'" >&2
 	rm -Rf "$TEMP_DIR"
@@ -166,9 +166,9 @@ fi
 # check the keychain
 if [ "${KEYCHAIN}" != "" ];
 then
-	security list-keychains -s $KEYCHAIN
-	security unlock $KEYCHAIN
-	security default-keychain -s $KEYCHAIN
+	security list-keychains -s "$KEYCHAIN"
+	security unlock "$KEYCHAIN"
+	security default-keychain -s "$KEYCHAIN"
 fi
 
 # Set the app name
@@ -186,11 +186,11 @@ then
 fi
 
 # Read in current values from the app
-CURRENT_NAME=`PlistBuddy -c "Print :CFBundleDisplayName" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
-CURRENT_BUNDLE_IDENTIFIER=`PlistBuddy -c "Print :CFBundleIdentifier" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+CURRENT_NAME=$(PlistBuddy -c "Print :CFBundleDisplayName" "$TEMP_DIR/Payload/$APP_NAME/Info.plist")
+CURRENT_BUNDLE_IDENTIFIER=$(PlistBuddy -c "Print :CFBundleIdentifier" "$TEMP_DIR/Payload/$APP_NAME/Info.plist")
 if [ "${BUNDLE_IDENTIFIER}" == "" ];
 then
-	BUNDLE_IDENTIFIER=`egrep -a -A 2 application-identifier "${NEW_PROVISION}" | grep string | sed -e 's/<string>//' -e 's/<\/string>//' -e 's/ //' | awk '{split($0,a,"."); i = length(a); for(ix=2; ix <= i;ix++){ s=s a[ix]; if(i!=ix){s=s "."};} print s;}'`
+	BUNDLE_IDENTIFIER=$(egrep -a -A 2 application-identifier "${NEW_PROVISION}" | grep string | sed -e 's/<string>//' -e 's/<\/string>//' -e 's/ //' | awk '{split($0,a,"."); i = length(a); for(ix=2; ix <= i;ix++){ s=s a[ix]; if(i!=ix){s=s "."};} print s;}')
 	if [[ "${BUNDLE_IDENTIFIER}" == *\** ]]; then
 		echo "Bundle Identifier contains a *, using the current bundle identifier" >&2
 		BUNDLE_IDENTIFIER=$CURRENT_BUNDLE_IDENTIFIER;
@@ -207,7 +207,7 @@ then
 	if [ "${DISPLAY_NAME}" != "${CURRENT_NAME}" ];
 	then
 		echo "Changing display name from '$CURRENT_NAME' to '$DISPLAY_NAME'" >&2
-		`PlistBuddy -c "Set :CFBundleDisplayName $DISPLAY_NAME" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+		PlistBuddy -c "Set :CFBundleDisplayName $DISPLAY_NAME" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"
 	fi
 fi
 
@@ -220,10 +220,10 @@ then
 		security cms -D -i "$NEW_PROVISION" > "$TEMP_DIR/profile.plist"
 		checkStatus
 
-		APP_IDENTIFER_PREFIX=`PlistBuddy -c "Print :Entitlements:application-identifier" "$TEMP_DIR/profile.plist" | grep -E '^[A-Z0-9]*' -o | tr -d '\n'` 
+		APP_IDENTIFER_PREFIX=$(PlistBuddy -c "Print :Entitlements:application-identifier" "$TEMP_DIR/profile.plist" | grep -E '^[A-Z0-9]*' -o | tr -d '\n')
 		if [ "$APP_IDENTIFER_PREFIX" == "" ];
 		then
-			APP_IDENTIFER_PREFIX=`PlistBuddy -c "Print :ApplicationIdentifierPrefix:0" "$TEMP_DIR/profile.plist"` 
+			APP_IDENTIFER_PREFIX=$(PlistBuddy -c "Print :ApplicationIdentifierPrefix:0" "$TEMP_DIR/profile.plist")
 			if [ "$APP_IDENTIFER_PREFIX" == "" ];
 			then
 				echo "Failed to extract any app identifier prefix from '$NEW_PROVISION'" >&2
@@ -234,11 +234,11 @@ then
 		else
 			echo "Profile app identifier prefix is '$APP_IDENTIFER_PREFIX'" >&2
 		fi
-		
-		TEAM_IDENTIFIER=`PlistBuddy -c "Print :Entitlements:com.apple.developer.team-identifier" "$TEMP_DIR/profile.plist" | tr -d '\n'` 
+
+		TEAM_IDENTIFIER=$(PlistBuddy -c "Print :Entitlements:com.apple.developer.team-identifier" "$TEMP_DIR/profile.plist" | tr -d '\n')
 		if [ "$TEAM_IDENTIFIER" == "" ];
 		then
-			TEAM_IDENTIFIER=`PlistBuddy -c "Print :TeamIdentifier:0" "$TEMP_DIR/profile.plist"` 
+			TEAM_IDENTIFIER=$(PlistBuddy -c "Print :TeamIdentifier:0" "$TEMP_DIR/profile.plist")
 			if [ "$TEAM_IDENTIFIER" == "" ];
 			then
 				echo "Failed to extract team identifier from '$NEW_PROVISION', resigned ipa may fail on iOS 8 and higher" >&2
@@ -264,19 +264,19 @@ fi
 if [ "$CURRENT_BUNDLE_IDENTIFIER" != "$BUNDLE_IDENTIFIER" ];
 then
 	echo "Updating the bundle identifier from '$CURRENT_BUNDLE_IDENTIFIER' to '$BUNDLE_IDENTIFIER'" >&2
-	`PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_IDENTIFIER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+	PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_IDENTIFIER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"
 	checkStatus
 fi
 
 # Update the version number properties in the Info.plist if a version number has been provided
 if [ "$VERSION_NUMBER" != "" ];
 then
-	CURRENT_VERSION_NUMBER=`PlistBuddy -c "Print :CFBundleVersion" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+	CURRENT_VERSION_NUMBER=$(PlistBuddy -c "Print :CFBundleVersion" "$TEMP_DIR/Payload/$APP_NAME/Info.plist")
 	if [ "$VERSION_NUMBER" != "$CURRENT_VERSION_NUMBER" ];
 	then
 		echo "Updating the version from '$CURRENT_VERSION_NUMBER' to '$VERSION_NUMBER'" >&2
-		`PlistBuddy -c "Set :CFBundleVersion $VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
-		`PlistBuddy -c "Set :CFBundleShortVersionString $VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"`
+		PlistBuddy -c "Set :CFBundleVersion $VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"
+		PlistBuddy -c "Set :CFBundleShortVersionString $VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"
 	fi
 fi
 
@@ -289,7 +289,7 @@ then
 		echo "ERROR: embedded frameworks detected, re-signing iOS 8 (or higher) applications wihout a team identifier in the certificate/profile does not work" >&2
 		exit 1;
 	fi
-	
+
 	echo "Resigning embedded frameworks using certificate: '$CERTIFICATE'" >&2
 	for framework in "$FRAMEWORKS_DIR"/*
 	do
@@ -309,13 +309,13 @@ if [ "$ENTITLEMENTS" != "" ];
 then
 	if [ -n "$APP_IDENTIFER_PREFIX" ];
 	then
-		# sanity check the 'application-identifier' is present in the provided entitlements and matches the provisioning profile value 
-		ENTITLEMENTS_APP_ID_PREFIX=`PlistBuddy -c "Print :application-identifier" "$ENTITLEMENTS" | grep -E '^[A-Z0-9]*' -o | tr -d '\n'` 
-		if [ "$ENTITLEMENTS_APP_ID_PREFIX" == "" ]; 
+		# sanity check the 'application-identifier' is present in the provided entitlements and matches the provisioning profile value
+		ENTITLEMENTS_APP_ID_PREFIX=$(PlistBuddy -c "Print :application-identifier" "$ENTITLEMENTS" | grep -E '^[A-Z0-9]*' -o | tr -d '\n')
+		if [ "$ENTITLEMENTS_APP_ID_PREFIX" == "" ];
 		then
 			echo "Provided entitlements file is missing a value for the required 'application-identifier' key" >&2
 			exit 1;
-		elif [ "$ENTITLEMENTS_APP_ID_PREFIX" != "$APP_IDENTIFER_PREFIX" ]; 
+		elif [ "$ENTITLEMENTS_APP_ID_PREFIX" != "$APP_IDENTIFER_PREFIX" ];
 		then
 			echo "Provided entitlements file's app identifier prefix value '$ENTITLEMENTS_APP_ID_PREFIX' does not match the provided provisioning profile's value '$APP_IDENTIFER_PREFIX'" >&2
 			exit 1;
@@ -325,12 +325,12 @@ then
 	if [ -n "$TEAM_IDENTIFIER" ];
 	then
 		# sanity check the 'com.apple.developer.team-identifier' is present in the provided entitlements and matches the provisioning profile value
-		ENTITLEMENTS_TEAM_IDENTIFIER=`PlistBuddy -c "Print :com.apple.developer.team-identifier" "$ENTITLEMENTS" | tr -d '\n'` 
-		if [ "$ENTITLEMENTS_TEAM_IDENTIFIER" == "" ]; 
+		ENTITLEMENTS_TEAM_IDENTIFIER=$(PlistBuddy -c "Print :com.apple.developer.team-identifier" "$ENTITLEMENTS" | tr -d '\n')
+		if [ "$ENTITLEMENTS_TEAM_IDENTIFIER" == "" ];
 		then
 			echo "Provided entitlements file is missing a value for the required 'com.apple.developer.team-identifier' key" >&2
 			exit 1;
-		elif [ "$ENTITLEMENTS_TEAM_IDENTIFIER" != "$TEAM_IDENTIFIER" ]; 
+		elif [ "$ENTITLEMENTS_TEAM_IDENTIFIER" != "$TEAM_IDENTIFIER" ];
 		then
 			echo "Provided entitlements file's 'com.apple.developer.team-identifier' '$ENTITLEMENTS_TEAM_IDENTIFIER' does not match the provided provisioning profile's value '$TEAM_IDENTIFIER'" >&2
 			exit 1;
@@ -346,7 +346,7 @@ else
 	/usr/bin/codesign -d --entitlements - "$TEMP_DIR/Payload/$APP_NAME" > "$TEMP_DIR/newEntitlements" 2> /dev/null
 	if [ $? -eq 0 ];
 	then
-		ENTITLEMENTS_TEMP=`cat "$TEMP_DIR/newEntitlements" | sed -E -e '1d'`
+		ENTITLEMENTS_TEMP=$(sed -E -e '1d' "$TEMP_DIR/newEntitlements")
 		if [ -n "$ENTITLEMENTS_TEMP" ]; then
 			echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>$ENTITLEMENTS_TEMP" > "$TEMP_DIR/newEntitlements"
 			if [ -s "$TEMP_DIR/newEntitlements" ];
@@ -427,7 +427,7 @@ echo "Repackaging as $NEW_FILE" >&2
 # Zip all the contents, saving the zip file in the above directory
 # Navigate back to the orignating directory (sending the output to null)
 pushd "$TEMP_DIR" > /dev/null
-zip -qr "../$TEMP_DIR.ipa" *
+zip -qr "../$TEMP_DIR.ipa" ./*
 popd > /dev/null
 
 # Move the resulting ipa to the target destination
