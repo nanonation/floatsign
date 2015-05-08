@@ -62,11 +62,11 @@ fi
 }
 
 if [ $# -lt 3 ]; then
-	echo "usage: $0 source identity -p provisioning [-e entitlements] [-r adjustBetaReports] [-d displayName] [-n version] -b bundleId outputIpa" >&2
-	echo "       -p and -b are optional, but their use is heavly recommended" >&2
-	echo "       -r flag requires a value '-r yes'"
-	echo "       -r flag is ignored if -e is also used" >&2
-	exit 1
+    echo "usage: $0 source identity -p provisioning [-e entitlements] [-r adjustBetaReports] [-d displayName] [-n version] -b bundleId outputIpa" >&2
+    echo "       -b is optional, but heavly recommended" >&2
+    echo "       -r flag requires a value '-r yes'"
+    echo "       -r flag is ignored if -e is also used" >&2
+    exit 1
 fi
 
 ORIGINAL_FILE="$1"
@@ -422,16 +422,28 @@ rm -f "$TEMP_DIR/profile.plist"
 # Repackage quietly
 echo "Repackaging as $NEW_FILE" >&2
 
-# Zip up the contents of the "$TEMP_DIR" folder
-# Navigate to the temporary directory (sending the output to null)
-# Zip all the contents, saving the zip file in the above directory
-# Navigate back to the orignating directory (sending the output to null)
-pushd "$TEMP_DIR" > /dev/null
-zip -qr "../$TEMP_DIR.ipa" ./*
-popd > /dev/null
+newextension="${NEW_FILE##*.}"
 
-# Move the resulting ipa to the target destination
-mv "$TEMP_DIR.ipa" "$NEW_FILE"
+# Check if the supplied file is an ipa or an app file
+if [ "${newextension}" = "ipa" ]
+then
+    # Zip up the contents of the "$TEMP_DIR" folder
+    # Navigate to the temporary directory (sending the output to null)
+    # Zip all the contents, saving the zip file in the above directory
+    # Navigate back to the orignating directory (sending the output to null)
+    pushd "$TEMP_DIR" > /dev/null
+    zip -qr "../$TEMP_DIR.ipa" ./*
+    popd > /dev/null
+
+    # Move the resulting ipa to the target destination
+    mv "$TEMP_DIR.ipa" "$NEW_FILE"
+elif [ "${extension}" = "app" ]
+then
+    if [ -d $NEW_FILE ]; then
+        rm -rf $NEW_FILE
+    fi
+    cp -r "$TEMP_DIR"/Payload/$APP_NAME "$NEW_FILE"
+fi
 
 # Remove the temp directory
 rm -rf "$TEMP_DIR"
