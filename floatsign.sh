@@ -465,12 +465,15 @@ then
 
     # Move the resulting ipa to the target destination
     mv "$TEMP_DIR.ipa" "$NEW_FILE"
-elif [ "${extension}" = "app" ]
+elif [ "${newextension}" = "app" ]
 then
     if [ -d $NEW_FILE ]; then
         rm -rf $NEW_FILE
     fi
     cp -r "$TEMP_DIR"/Payload/$APP_NAME "$NEW_FILE"
+else
+	echo "Repackaging failed, unrecognized output extension '$newextension'" >&2
+	exit 1;
 fi
 
 # Remove the temp directory
