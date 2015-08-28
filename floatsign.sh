@@ -280,6 +280,34 @@ then
 	fi
 fi
 
+# Check for and resign any embedded apple watch extensions (new feature for iOS 8 and above apps)
+PLUGINS_DIR="$TEMP_DIR/Payload/$APP_NAME/PlugIns"
+if [ -d "$PLUGINS_DIR" ];
+then
+  if [ "$TEAM_IDENTIFIER" == "" ];
+  then
+    echo "ERROR: embedded plugin detected, re-signing iOS 8 (or higher) applications wihout a team identifier in the certificate/profile does not work" >&2
+    exit 1;
+  fi
+  
+  echo "Resigning embedded plugins using certificate: '$CERTIFICATE'" >&2
+  for plugin in "$PLUGINS_DIR"/*
+  do
+    if [[ "$plugin" == *.appex ]]
+    then
+      for app in "$plugin"/*.app
+      do
+        /usr/bin/codesign -f -s "$CERTIFICATE" --entitlements="$ENTITLEMENTS" "$app"
+        checkStatus
+      done
+      /usr/bin/codesign -f -s "$CERTIFICATE" --entitlements="$ENTITLEMENTS" "$plugin"
+      checkStatus
+    else
+      echo "Ignoring non-plugin: $plugin" >&2
+    fi
+  done
+fi
+
 # Check for and resign any embedded frameworks (new feature for iOS 8 and above apps)
 FRAMEWORKS_DIR="$TEMP_DIR/Payload/$APP_NAME/Frameworks"
 if [ -d "$FRAMEWORKS_DIR" ];
