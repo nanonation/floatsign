@@ -234,7 +234,7 @@ then
 			echo "'Ad Hoc' provisioning profile detected"
 		fi
 
-		APP_IDENTIFER_PREFIX=$(PlistBuddy -c "Print :Entitlements:application-identifier" "$TEMP_DIR/profile.plist" | grep -E '^[A-Z0-9]*' -o | tr -d '\n')
+		APP_IDENTIFER_PREFIX=$(PlistBuddy -c "Print :Entitlements:application-identifier" "$TEMP_DIR/profile.plist" | grep -E '^[a-zA-Z0-9\.]*' -o | tr -d '\n')
 		if [ "$APP_IDENTIFER_PREFIX" == "" ];
 		then
 			APP_IDENTIFER_PREFIX=$(PlistBuddy -c "Print :ApplicationIdentifierPrefix:0" "$TEMP_DIR/profile.plist")
@@ -352,7 +352,7 @@ then
 	if [ -n "$APP_IDENTIFER_PREFIX" ];
 	then
 		# sanity check the 'application-identifier' is present in the provided entitlements and matches the provisioning profile value
-		ENTITLEMENTS_APP_ID_PREFIX=$(PlistBuddy -c "Print :application-identifier" "$ENTITLEMENTS" | grep -E '^[A-Z0-9]*' -o | tr -d '\n')
+		ENTITLEMENTS_APP_ID_PREFIX=$(PlistBuddy -c "Print :application-identifier" "$ENTITLEMENTS" | grep -E '^[a-zA-Z0-9\.]*' -o | tr -d '\n')
 		if [ "$ENTITLEMENTS_APP_ID_PREFIX" == "" ];
 		then
 			echo "Provided entitlements file is missing a value for the required 'application-identifier' key" >&2
