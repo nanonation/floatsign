@@ -81,6 +81,9 @@ KEYCHAIN=""
 VERSION_NUMBER=""
 ADJUST_BETA_REPORTS_ACTIVE_FLAG="0"
 TEMP_DIR="_floatsignTemp"
+IS_ENTERPRISE_PROFILE="false"
+IS_ADHOC_PROFILE="false"
+ADHOC_PROVISIONED_DEVICES=""
 
 # options start index
 OPTIND=3
@@ -219,6 +222,17 @@ then
 		echo "Validating the new provisioning profile: $NEW_PROVISION" >&2
 		security cms -D -i "$NEW_PROVISION" > "$TEMP_DIR/profile.plist"
 		checkStatus
+
+		IS_ENTERPRISE_PROFILE=`PlistBuddy -c "Print :ProvisionsAllDevices" "$TEMP_DIR/profile.plist" 2> /dev/null | tr -d '\n'`
+		if [ "$IS_ENTERPRISE_PROFILE" == "true" ]; then
+			echo "Enterprise 'In House' provisioning profile detected"
+		fi
+		
+        ADHOC_PROVISIONED_DEVICES=`PlistBuddy -c "Print :ProvisionedDevices" "$TEMP_DIR/profile.plist" 2> /dev/null | tr -d '\n'`
+		if [ -n "$ADHOC_PROVISIONED_DEVICES" ]; then
+			IS_ADHOC_PROFILE="true"
+			echo "'Ad Hoc' provisioning profile detected"
+		fi
 
 		APP_IDENTIFER_PREFIX=$(PlistBuddy -c "Print :Entitlements:application-identifier" "$TEMP_DIR/profile.plist" | grep -E '^[A-Z0-9]*' -o | tr -d '\n')
 		if [ "$APP_IDENTIFER_PREFIX" == "" ];
@@ -389,13 +403,17 @@ else
 				PlistBuddy -c "Set :keychain-access-groups:0 ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
 #				checkStatus  -- if this fails it's likely because the keychain-access-groups key does not exist, so we have nothing to update
 				if [[ "$CERTIFICATE" == *Distribution* ]]; then
-					IS_ENTERPRISE_PROFILE=`PlistBuddy -c "Print :ProvisionsAllDevices" "$TEMP_DIR/profile.plist" | tr -d '\n'`
 					echo "Assuming Distribution Identity"
 					if [ "$ADJUST_BETA_REPORTS_ACTIVE_FLAG" == "1" ]; then
 						if [ "$IS_ENTERPRISE_PROFILE" == "true" ]; then
-							echo "Ensuring beta-reports-active is not included for Enterprise environment"
-							PlistBuddy -c "Delete :beta-reports-active" "$TEMP_DIR/newEntitlements"
-							checkStatus
+							echo "Ensuring beta-reports-active is not included for Enterprise 'In House' application"
+							PlistBuddy -c "Delete :beta-reports-active" "$TEMP_DIR/newEntitlements" 2> /dev/null
+#                           checkStatus -- this can fail is beta-reports-active isn't present, which is OK
+                        elif [ "$IS_ADHOC_PROFILE" == "true" ]; then
+                            echo "Ensuring beta-reports-active is not included for 'Ad Hoc' application"
+                            # don't exit if doesn't exist
+                            PlistBuddy -c "Delete :beta-reports-active" "$TEMP_DIR/newEntitlements" 2> /dev/null || true
+#                           checkStatus -- this can fail is beta-reports-active isn't present, which is OK
 						else
 							echo "Ensuring beta-reports-active is present and enabled"
 							# new beta key is only used for Distribution; might not exist yet, if we were building Development
