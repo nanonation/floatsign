@@ -352,14 +352,14 @@ then
 	if [ -n "$APP_IDENTIFER_PREFIX" ];
 	then
 		# sanity check the 'application-identifier' is present in the provided entitlements and matches the provisioning profile value
-		ENTITLEMENTS_APP_ID_PREFIX=$(PlistBuddy -c "Print :application-identifier" "$ENTITLEMENTS" | grep -E '^[a-zA-Z0-9\.]*' -o | tr -d '\n')
-		if [ "$ENTITLEMENTS_APP_ID_PREFIX" == "" ];
+		ENTITLEMENTS_APP_ID=$(PlistBuddy -c "Print :application-identifier" "$ENTITLEMENTS" | grep -E '^[a-zA-Z0-9\.]*' -o | tr -d '\n')
+		if [ "$ENTITLEMENTS_APP_ID" == "" ];
 		then
 			echo "Provided entitlements file is missing a value for the required 'application-identifier' key" >&2
 			exit 1;
-		elif [ "$ENTITLEMENTS_APP_ID_PREFIX" != "$APP_IDENTIFER_PREFIX" ];
+		elif [[ "$ENTITLEMENTS_APP_ID" != "$APP_IDENTIFER_PREFIX"* ]];
 		then
-			echo "Provided entitlements file's app identifier prefix value '$ENTITLEMENTS_APP_ID_PREFIX' does not match the provided provisioning profile's value '$APP_IDENTIFER_PREFIX'" >&2
+			echo "Provided entitlements file's app identifier value '$ENTITLEMENTS_APP_ID' does not start with the provided provisioning profile's value '$APP_IDENTIFER_PREFIX'" >&2
 			exit 1;
 		fi
 	fi
