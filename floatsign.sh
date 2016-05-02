@@ -227,7 +227,7 @@ then
 		if [ "$IS_ENTERPRISE_PROFILE" == "true" ]; then
 			echo "Enterprise 'In House' provisioning profile detected"
 		fi
-		
+
         ADHOC_PROVISIONED_DEVICES=`PlistBuddy -c "Print :ProvisionedDevices" "$TEMP_DIR/profile.plist" 2> /dev/null | tr -d '\n'`
 		if [ -n "$ADHOC_PROVISIONED_DEVICES" ]; then
 			IS_ADHOC_PROFILE="true"
@@ -235,9 +235,11 @@ then
 		fi
 
 		APP_IDENTIFER_PREFIX=$(PlistBuddy -c "Print :Entitlements:application-identifier" "$TEMP_DIR/profile.plist" | grep -E '^[a-zA-Z0-9\.]*' -o | tr -d '\n')
+		APP_IDENTIFER_PREFIX=$(PlistBuddy -c "Print :ApplicationIdentifierPrefix:0" "$TEMP_DIR/profile.plist")
 		if [ "$APP_IDENTIFER_PREFIX" == "" ];
 		then
 			APP_IDENTIFER_PREFIX=$(PlistBuddy -c "Print :ApplicationIdentifierPrefix:0" "$TEMP_DIR/profile.plist")
+			echo $APP_IDENTIFER_PREFIX
 			if [ "$APP_IDENTIFER_PREFIX" == "" ];
 			then
 				echo "Failed to extract any app identifier prefix from '$NEW_PROVISION'" >&2
@@ -263,6 +265,9 @@ then
 			echo "Profile team identifier is '$TEAM_IDENTIFIER'" >&2
 		fi
 
+		APP_KEYCHAIN_ACCESS_GROUP=$(PlistBuddy -c "Print :Entitlements:keychain-access-groups:0" "$TEMP_DIR/profile.plist")
+		APPS_ENVIRONMENT=$(PlistBuddy -c "Print :Entitlements:aps-environment" "$TEMP_DIR/profile.plist")
+
 		cp "$NEW_PROVISION" "$TEMP_DIR/Payload/$APP_NAME/embedded.mobileprovision"
 	else
 		echo "Provisioning profile '$NEW_PROVISION' file does not exist" >&2
@@ -281,7 +286,6 @@ then
 	PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_IDENTIFIER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"
 	checkStatus
 fi
-
 # Update the version number properties in the Info.plist if a version number has been provided
 if [ "$VERSION_NUMBER" != "" ];
 then
@@ -303,7 +307,7 @@ then
     echo "ERROR: embedded plugin detected, re-signing iOS 8 (or higher) applications wihout a team identifier in the certificate/profile does not work" >&2
     exit 1;
   fi
-  
+
   echo "Resigning embedded plugins using certificate: '$CERTIFICATE'" >&2
   for plugin in "$PLUGINS_DIR"/*
   do
@@ -400,7 +404,13 @@ else
 				fi
 				PlistBuddy -c "Set :application-identifier ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
 				checkStatus
-				PlistBuddy -c "Set :keychain-access-groups:0 ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
+
+				if [ "$APP_KEYCHAIN_ACCESS_GROUP" == "" ]; then
+					PlistBuddy -c "Set :keychain-access-groups:0 ${APP_IDENTIFER_PREFIX}.${BUNDLE_IDENTIFIER}" "$TEMP_DIR/newEntitlements"
+				else
+					PlistBuddy -c "Set :keychain-access-groups:0 ${APP_KEYCHAIN_ACCESS_GROUP}" "$TEMP_DIR/newEntitlements"
+				fi
+
 #				checkStatus  -- if this fails it's likely because the keychain-access-groups key does not exist, so we have nothing to update
 				if [[ "$CERTIFICATE" == *Distribution* ]]; then
 					echo "Assuming Distribution Identity"
@@ -437,6 +447,13 @@ else
 					echo "Setting get-task-allow entitlement to YES"
 					PlistBuddy -c "Set :get-task-allow YES" "$TEMP_DIR/newEntitlements"
 				fi
+
+				if [ "$APPS_ENVIRONMENT" != "" ]; then
+					PlistBuddy -c "Set :aps-environment ${APPS_ENVIRONMENT}" "$TEMP_DIR/newEntitlements"
+				else
+					PlistBuddy -c "Delete :aps-environment" "$TEMP_DIR/newEntitlements"
+				fi
+
 				checkStatus
 				plutil -lint "$TEMP_DIR/newEntitlements" > /dev/null
 				checkStatus
