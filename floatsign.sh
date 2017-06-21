@@ -86,6 +86,9 @@ IS_ENTERPRISE_PROFILE="false"
 IS_ADHOC_PROFILE="false"
 ADHOC_PROVISIONED_DEVICES=""
 
+CERTIFICATE_HASH=$(security find-certificate -c "$CERTIFICATE" -Z | awk '{print $3; exit}')
+echo "Specified certificate hash: "$CERTIFICATE_HASH
+
 # options start index
 OPTIND=3
 while getopts p:d:e:k:b:r:n:v: opt; do
@@ -331,10 +334,10 @@ then
     then
       for app in "$plugin"/*.app
       do
-        /usr/bin/codesign -f -s "$CERTIFICATE" --entitlements="$ENTITLEMENTS" "$app"
+        /usr/bin/codesign -f -s "$CERTIFICATE_HASH" --entitlements="$ENTITLEMENTS" "$app"
         checkStatus
       done
-      /usr/bin/codesign -f -s "$CERTIFICATE" --entitlements="$ENTITLEMENTS" "$plugin"
+      /usr/bin/codesign -f -s "$CERTIFICATE_HASH" --entitlements="$ENTITLEMENTS" "$plugin"
       checkStatus
     else
       echo "Ignoring non-plugin: $plugin" >&2
@@ -357,7 +360,7 @@ then
 	do
 		if [[ "$framework" == *.framework || "$framework" == *.dylib ]]
 		then
-			/usr/bin/codesign -f -s "$CERTIFICATE" "$framework"
+			/usr/bin/codesign -f -s "$CERTIFICATE_HASH" "$framework"
 			checkStatus
 		else
 			echo "Ignoring non-framework: $framework" >&2
@@ -401,7 +404,7 @@ then
 
 	echo "Resigning application using certificate: '$CERTIFICATE'" >&2
 	echo "and entitlements: $ENTITLEMENTS" >&2
-	/usr/bin/codesign -f -s "$CERTIFICATE" --entitlements="$ENTITLEMENTS" "$TEMP_DIR/Payload/$APP_NAME"
+	/usr/bin/codesign -f -s "$CERTIFICATE_HASH" --entitlements="$ENTITLEMENTS" "$TEMP_DIR/Payload/$APP_NAME"
 	checkStatus
 else
 	echo "Extracting existing entitlements for updating" >&2
@@ -479,7 +482,7 @@ else
 				then
 					echo "and team identifier: '$TEAM_IDENTIFIER'" >&2
 				fi
-				/usr/bin/codesign -f -s "$CERTIFICATE" --entitlements="$TEMP_DIR/newEntitlements" "$TEMP_DIR/Payload/$APP_NAME"
+				/usr/bin/codesign -f -s "$CERTIFICATE_HASH" --entitlements="$TEMP_DIR/newEntitlements" "$TEMP_DIR/Payload/$APP_NAME"
 				checkStatus
 			else
 				echo "Failed to create required intermediate file" >&2
@@ -489,14 +492,14 @@ else
 			echo "No entitlements found" >&2
 			echo "Resigning application using certificate: '$CERTIFICATE'" >&2
 			echo "without entitlements" >&2
-			/usr/bin/codesign -f -s "$CERTIFICATE" "$TEMP_DIR/Payload/$APP_NAME"
+			/usr/bin/codesign -f -s "$CERTIFICATE_HASH" "$TEMP_DIR/Payload/$APP_NAME"
 			checkStatus
 		fi
 	else
 		echo "Failed to extract entitlements" >&2
 		echo "Resigning application using certificate: '$CERTIFICATE'" >&2
 		echo "without entitlements" >&2
-		/usr/bin/codesign -f -s "$CERTIFICATE" "$TEMP_DIR/Payload/$APP_NAME"
+		/usr/bin/codesign -f -s "$CERTIFICATE_HASH" "$TEMP_DIR/Payload/$APP_NAME"
 		checkStatus
 	fi
 fi
