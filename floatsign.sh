@@ -62,7 +62,7 @@ fi
 }
 
 if [ $# -lt 3 ]; then
-    echo "usage: $0 source identity -p provisioning [-e entitlements] [-r adjustBetaReports] [-d displayName] [-n version] -b bundleId outputIpa" >&2
+    echo "usage: $0 source identity -p provisioning [-e entitlements] [-r adjustBetaReports] [-d displayName] [-n version] [-v version] -b bundleId outputIpa" >&2
     echo "       -b is optional, but heavly recommended" >&2
     echo "       -r flag requires a value '-r yes'"
     echo "       -r flag is ignored if -e is also used" >&2
@@ -79,6 +79,7 @@ APP_IDENTIFER_PREFIX=""
 TEAM_IDENTIFIER=""
 KEYCHAIN=""
 VERSION_NUMBER=""
+BUNDLE_VERSION_NUMBER=""
 ADJUST_BETA_REPORTS_ACTIVE_FLAG="0"
 TEMP_DIR="_floatsignTemp"
 IS_ENTERPRISE_PROFILE="false"
@@ -87,7 +88,7 @@ ADHOC_PROVISIONED_DEVICES=""
 
 # options start index
 OPTIND=3
-while getopts p:d:e:k:b:r:n: opt; do
+while getopts p:d:e:k:b:r:n:v: opt; do
 	case $opt in
 		p)
 			NEW_PROVISION="$OPTARG"
@@ -112,6 +113,10 @@ while getopts p:d:e:k:b:r:n: opt; do
 		n)
 			VERSION_NUMBER="$OPTARG"
 			echo "Specified version to use: '$VERSION_NUMBER'" >&2
+			;;
+		v)
+			BUNDLE_VERSION_NUMBER="$OPTARG"
+			echo "Specified bundle version to use: '$BUNDLE_VERSION_NUMBER'" >&2
 			;;
 		r)
 			ADJUST_BETA_REPORTS_ACTIVE_FLAG="1"
@@ -294,7 +299,18 @@ then
 	then
 		echo "Updating the version from '$CURRENT_VERSION_NUMBER' to '$VERSION_NUMBER'" >&2
 		PlistBuddy -c "Set :CFBundleVersion $VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"
-		PlistBuddy -c "Set :CFBundleShortVersionString $VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"
+		#PlistBuddy -c "Set :CFBundleShortVersionString $VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"
+	fi
+fi
+
+# Update the version number properties in the Info.plist if a version number has been provided
+if [ "$BUNDLE_VERSION_NUMBER" != "" ];
+then
+	CURRENT_BUNDLE_VERSION_NUMBER=$(PlistBuddy -c "Print :CFBundleShortVersionString" "$TEMP_DIR/Payload/$APP_NAME/Info.plist")
+	if [ "$BUNDLE_VERSION_NUMBER" != "$CURRENT_BUNDLE_VERSION_NUMBER" ];
+	then
+		echo "Updating the version from '$CURRENT_BUNDLE_VERSION_NUMBER' to '$BUNDLE_VERSION_NUMBER'" >&2
+		PlistBuddy -c "Set :CFBundleShortVersionString $BUNDLE_VERSION_NUMBER" "$TEMP_DIR/Payload/$APP_NAME/Info.plist"
 	fi
 fi
 
