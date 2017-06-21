@@ -274,7 +274,7 @@ then
 		fi
 
 		APP_KEYCHAIN_ACCESS_GROUP=$(PlistBuddy -c "Print :Entitlements:keychain-access-groups:0" "$TEMP_DIR/profile.plist")
-		APPS_ENVIRONMENT=$(PlistBuddy -c "Print :Entitlements:aps-environment" "$TEMP_DIR/profile.plist")
+		APPS_ENVIRONMENT=$(PlistBuddy -c "Print :Entitlements:aps-environment" "$TEMP_DIR/profile.plist" 2> /dev/null)
 
 		cp "$NEW_PROVISION" "$TEMP_DIR/Payload/$APP_NAME/embedded.mobileprovision"
 	else
@@ -470,7 +470,7 @@ else
 				if [ "$APPS_ENVIRONMENT" != "" ]; then
 					PlistBuddy -c "Set :aps-environment ${APPS_ENVIRONMENT}" "$TEMP_DIR/newEntitlements"
 				else
-					PlistBuddy -c "Delete :aps-environment" "$TEMP_DIR/newEntitlements"
+					PlistBuddy -c "Delete :aps-environment" "$TEMP_DIR/newEntitlements" 2> /dev/null
 				fi
 
 				checkStatus
