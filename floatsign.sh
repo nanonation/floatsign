@@ -193,7 +193,7 @@ CURRENT_NAME=$(PlistBuddy -c "Print :CFBundleDisplayName" "$TEMP_DIR/Payload/$AP
 CURRENT_BUNDLE_IDENTIFIER=$(PlistBuddy -c "Print :CFBundleIdentifier" "$TEMP_DIR/Payload/$APP_NAME/Info.plist")
 if [ "${BUNDLE_IDENTIFIER}" == "" ];
 then
-	BUNDLE_IDENTIFIER=$(egrep -a -A 2 application-identifier "${NEW_PROVISION}" | grep string | sed -e 's/<string>//' -e 's/<\/string>//' -e 's/ //' | awk '{split($0,a,"."); i = length(a); for(ix=2; ix <= i;ix++){ s=s a[ix]; if(i!=ix){s=s "."};} print s;}')
+	BUNDLE_IDENTIFIER=$(grep -a -A -E 2 application-identifier "${NEW_PROVISION}" | grep string | sed -e 's/<string>//' -e 's/<\/string>//' -e 's/ //' | awk '{split($0,a,"."); i = length(a); for(ix=2; ix <= i;ix++){ s=s a[ix]; if(i!=ix){s=s "."};} print s;}')
 	if [[ "${BUNDLE_IDENTIFIER}" == *\** ]]; then
 		echo "Bundle Identifier contains a *, using the current bundle identifier" >&2
 		BUNDLE_IDENTIFIER=$CURRENT_BUNDLE_IDENTIFIER;
@@ -223,12 +223,12 @@ then
 		security cms -D -i "$NEW_PROVISION" > "$TEMP_DIR/profile.plist"
 		checkStatus
 
-		IS_ENTERPRISE_PROFILE=`PlistBuddy -c "Print :ProvisionsAllDevices" "$TEMP_DIR/profile.plist" 2> /dev/null | tr -d '\n'`
+		IS_ENTERPRISE_PROFILE=$(PlistBuddy -c "Print :ProvisionsAllDevices" "$TEMP_DIR/profile.plist" 2> /dev/null | tr -d '\n')
 		if [ "$IS_ENTERPRISE_PROFILE" == "true" ]; then
 			echo "Enterprise 'In House' provisioning profile detected"
 		fi
 		
-        ADHOC_PROVISIONED_DEVICES=`PlistBuddy -c "Print :ProvisionedDevices" "$TEMP_DIR/profile.plist" 2> /dev/null | tr -d '\n'`
+        ADHOC_PROVISIONED_DEVICES=$(PlistBuddy -c "Print :ProvisionedDevices" "$TEMP_DIR/profile.plist" 2> /dev/null | tr -d '\n')
 		if [ -n "$ADHOC_PROVISIONED_DEVICES" ]; then
 			IS_ADHOC_PROFILE="true"
 			echo "'Ad Hoc' provisioning profile detected"
@@ -484,18 +484,18 @@ then
     # Navigate to the temporary directory (sending the output to null)
     # Zip all the contents, saving the zip file in the above directory
     # Navigate back to the orignating directory (sending the output to null)
-    pushd "$TEMP_DIR" > /dev/null
+    cd "$TEMP_DIR" || exit 1
     zip -qr "../$TEMP_DIR.ipa" ./*
-    popd > /dev/null
+    cd - || exit 1
 
     # Move the resulting ipa to the target destination
     mv "$TEMP_DIR.ipa" "$NEW_FILE"
 elif [ "${newextension}" = "app" ]
 then
-    if [ -d $NEW_FILE ]; then
-        rm -rf $NEW_FILE
+    if [ -d "$NEW_FILE" ]; then
+        rm -rf "$NEW_FILE"
     fi
-    cp -r "$TEMP_DIR"/Payload/$APP_NAME "$NEW_FILE"
+    cp -r "$TEMP_DIR/Payload/$APP_NAME" "$NEW_FILE"
 else
 	echo "Repackaging failed, unrecognized output extension '$newextension'" >&2
 	exit 1;
