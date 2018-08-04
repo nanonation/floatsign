@@ -43,7 +43,7 @@
 # 1. change the app display name
 #
 # new features April 2013
-# 1. specify the target bundleId on the command line
+# 1. specify the target bundleId onv the command line
 # 2. correctly handles entitlements for keychain-enabled resigning
 #
 # new features November 2014
@@ -125,9 +125,18 @@ usage() {
     echo -e "\t    --bundle-version bundleVersion\tSpecify new bundle version (CFBundleVersion) number." >&2
     echo -e "\t\t\t\t\t\t\tWill apply for all nested apps and extensions." >&2
     echo -e "\t\t\t\t\t\t\tCan't use together with '-n, --version-number' option." >&2
-    echo -e "\t-b, --bundle-id bundleId\t\tSpecify new bundle identifier (CFBundleIdentifier)." >&2
-    echo -e "\t\t\t\t\t\t\tWarning: will NOT apply for nested apps and extensions." >&2
-    echo -e "\t    --use-app-entitlements\t\tExtract app bundle codesigning entitlements and combine with entitlements from new provisionin profile." >&2
+    echo -e "\t-b, --bundle-id bundleId\t\tSpecify new bundle identifier (CFBundleIdentifier). May be provided multiple times." >&2
+    echo -e "\t\t\t\t\t\tYou can specify a single bundle identifier, which will become the main bundle's" >&2
+    echo -e "\t\t\t\t\t\tidentifier. If you do, nested apps and extensions will keep their existing identifiers." >&2
+    echo -e "\t\t\t\t\t\t\t-b com.example.myapp" >&2
+    echo -e "" >&2
+    echo -e "\t\t\t\t\t\tAlternatively, you may rename multiple bundle identifiers if the application contains" >&2
+    echo -e "\t\t\t\t\t\tnested applications or app extensions by joining the old and new bundle identifiers with '='." >&2
+    echo -e "\t\t\t\t\t\t\t-b com.example.placeholder=com.example.myapp" >&2
+    echo -e "\t\t\t\t\t\t\t-b com.example.placeholder.notificationservice=com.example.myapp.notificationservice" >&2
+    echo -e "\t\t\t\t\t\t\t-b com.example.placeholder.watchapp=com.example.myapp.watchapp" >&2
+    echo -e "" >&2
+    echo -e "\t--use-app-entitlements\t\tExtract app bundle codesigning entitlements and combine with entitlements from new provisioning profile." >&2
     echo -e "\t\t\t\t\t\t\tCan't use together with '-e, --entitlements' option." >&2
     echo -e "\t--keychain-path path\t\t\tSpecify the path to a keychain that /usr/bin/codesign should use." >&2
     echo -e "\t-v, --verbose\t\t\t\tVerbose output." >&2
@@ -142,13 +151,14 @@ fi
 ORIGINAL_FILE="$1"
 CERTIFICATE="$2"
 ENTITLEMENTS=
-BUNDLE_IDENTIFIER=""
+NEW_BUNDLE_IDENTIFIERS_BY_CURRENT_IDENTIFIER=()
 DISPLAY_NAME=""
 KEYCHAIN=""
 VERSION_NUMBER=""
 SHORT_VERSION=
 BUNDLE_VERSION=
 KEYCHAIN_PATH=
+RAW_BUNDLE_IDENTIFIERS=()
 RAW_PROVISIONS=()
 PROVISIONS_BY_ID=()
 DEFAULT_PROVISION=""
@@ -178,7 +188,7 @@ while [ "$1" != "" ]; do
             ;;
         -b | --bundle-id )
             shift
-            BUNDLE_IDENTIFIER="$1"
+            RAW_BUNDLE_IDENTIFIERS+=("$1")
             ;;
         -k | --keychain )
             shift
@@ -234,11 +244,18 @@ for provision in "${RAW_PROVISIONS[@]}"; do
     fi
 done
 
+for bundle_id in "${RAW_BUNDLE_IDS[@]}"; do
+    if [[ "$bundle_id" =~ .+=.+ ]]; then
+        log "Specified new bundle identifier: '${bundle_id#*=}' for existing bundle identifier: '${bundle_id%%=*}'"
+    else
+        log "Specified new main bundle identifier: '$bundle_id'. Nested bundles will keep their existing identifiers."
+    fi
+done
+
 log "Original file: '$ORIGINAL_FILE'"
 log "Certificate: '$CERTIFICATE'"
 [[ -n "${DISPLAY_NAME}" ]] && log "Specified display name: '$DISPLAY_NAME'"
 [[ -n "${ENTITLEMENTS}" ]] && log "Specified signing entitlements: '$ENTITLEMENTS'"
-[[ -n "${BUNDLE_IDENTIFIER}" ]] && log "Specified bundle identifier: '$BUNDLE_IDENTIFIER'"
 [[ -n "${KEYCHAIN}" ]] && log "Specified keychain to use: '$KEYCHAIN'"
 [[ -n "${VERSION_NUMBER}" ]] && log "Specified version number to use: '$VERSION_NUMBER'"
 [[ -n "${SHORT_VERSION}" ]] && log "Specified short version to use: '$SHORT_VERSION'"
@@ -384,20 +401,42 @@ for ARG in "${RAW_PROVISIONS[@]}"; do
     add_provision "$ARG"
 done
 
+function add_bundle_identifier {
+
+    if [[ "$1" =~ .+=.+ ]]; then
+        # TODO: Detect conflicting bundle ID renames, like in add_provision_for_bundle_id
+        NEW_BUNDLE_IDENTIFIERS_BY_CURRENT_IDENTIFIER+=("$1")
+    else
+        # pair this lone bundle identifier with the main app's bundle identifier
+        local APP_PATH="$TEMP_DIR/Payload/$APP_NAME"
+        local CURRENT_BUNDLE_IDENTIFIER=$(PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
+        NEW_BUNDLE_IDENTIFIERS_BY_CURRENT_IDENTIFIER+=("$CURRENT_BUNDLE_IDENTIFIER=$1")
+    fi
+}
+
+for ARG in "#{RAW_BUNDLE_IDENTIFIERS[@]}"; do
+    add_bundle_identifier "$ARG"
+done
+
+# Find the new bundle identifier for an existing bundle identifier
+function new_bundle_identifier_for_current_identifier {
+
+    for ARG in "${NEW_BUNDLE_IDENTIFIERS_BY_CURRENT_IDENTIFIER[@]}"; do
+        if does_bundle_id_match "${ARG%%=*}" "$1" "$2"; then
+            BUNDLE_ID="${ARG#*=}"
+            break
+        fi
+    done
+}
+
 # Resign the given application
 function resign {
 
     local APP_PATH="$1"
     local NESTED="$2"
-    local BUNDLE_IDENTIFIER="$BUNDLE_IDENTIFIER"
     local NEW_PROVISION="$NEW_PROVISION"
     local APP_IDENTIFIER_PREFIX=""
     local TEAM_IDENTIFIER=""
-
-    if [[ "$NESTED" == NESTED ]]; then
-        # Ignore bundle identifier for nested applications
-        BUNDLE_IDENTIFIER=""
-    fi
 
     # Make sure that the Info.plist file is where we expect it
     if [ ! -e "$APP_PATH/Info.plist" ];
@@ -411,7 +450,8 @@ function resign {
     # Read in current values from the app
     local CURRENT_NAME=$(PlistBuddy -c "Print :CFBundleDisplayName" "$APP_PATH/Info.plist")
     local CURRENT_BUNDLE_IDENTIFIER=$(PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
-    local NEW_PROVISION=$(provision_for_bundle_id "${BUNDLE_IDENTIFIER:-$CURRENT_BUNDLE_IDENTIFIER}")
+    local NEW_BUNDLE_IDENTIFIER=$(new_bundle_identifier_for_current_identifier "$CURRENT_BUNDLE_IDENTIFIER")
+    local NEW_PROVISION=$(provision_for_bundle_id "${NEW_BUNDLE_IDENTIFIER:-$CURRENT_BUNDLE_IDENTIFIER}")
 
     if [[ "$NEW_PROVISION" == "" && "$NESTED" != NESTED ]]; then
         NEW_PROVISION="$DEFAULT_PROVISION"
@@ -419,9 +459,9 @@ function resign {
 
     if [[ "$NEW_PROVISION" == "" ]]; then
         if [[ "$NESTED" == NESTED ]]; then
-            warning "No provisioning profile for nested application: '$APP_PATH' with bundle identifier '${BUNDLE_IDENTIFIER:-$CURRENT_BUNDLE_IDENTIFIER}'"
+            warning "No provisioning profile for nested application: '$APP_PATH' with bundle identifier '${NEW_BUNDLE_IDENTIFIER:-$CURRENT_BUNDLE_IDENTIFIER}'"
         else
-            warning "No provisioning profile for application: '$APP_PATH' with bundle identifier '${BUNDLE_IDENTIFIER:-$CURRENT_BUNDLE_IDENTIFIER}'"
+            warning "No provisioning profile for application: '$APP_PATH' with bundle identifier '${NEW_BUNDLE_IDENTIFIER:-$CURRENT_BUNDLE_IDENTIFIER}'"
         fi
         error "Use the -p option (example: -p com.example.app=xxxx.mobileprovision)"
     fi
@@ -429,22 +469,22 @@ function resign {
     local PROVISION_BUNDLE_IDENTIFIER=$(bundle_id_for_provison "$NEW_PROVISION")
 
     # Use provisioning profile's bundle identifier
-    if [ "$BUNDLE_IDENTIFIER" == "" ]; then
+    if [ "$NEW_BUNDLE_IDENTIFIER" == "" ]; then
         # shellcheck disable=SC2049
         if [[ "$PROVISION_BUNDLE_IDENTIFIER" =~ \* ]]; then
             log "Bundle Identifier contains a *, using the current bundle identifier"
-            BUNDLE_IDENTIFIER="$CURRENT_BUNDLE_IDENTIFIER"
+            NEW_BUNDLE_IDENTIFIER="$CURRENT_BUNDLE_IDENTIFIER"
         else
-            BUNDLE_IDENTIFIER="$PROVISION_BUNDLE_IDENTIFIER"
+            NEW_BUNDLE_IDENTIFIER="$PROVISION_BUNDLE_IDENTIFIER"
         fi
     fi
 
-    if ! does_bundle_id_match "$PROVISION_BUNDLE_IDENTIFIER" "$BUNDLE_IDENTIFIER"; then
-        error "Bundle Identifier '$PROVISION_BUNDLE_IDENTIFIER' in provisioning profile '$NEW_PROVISION' does not match the Bundle Identifier '$BUNDLE_IDENTIFIER' for application '$APP_PATH'."
+    if ! does_bundle_id_match "$PROVISION_BUNDLE_IDENTIFIER" "$NEW_BUNDLE_IDENTIFIER"; then
+        error "Bundle Identifier '$PROVISION_BUNDLE_IDENTIFIER' in provisioning profile '$NEW_PROVISION' does not match the Bundle Identifier '$NEW_BUNDLE_IDENTIFIER' for application '$APP_PATH'."
     fi
 
     log "Current bundle identifier is: '$CURRENT_BUNDLE_IDENTIFIER'"
-    log "New bundle identifier will be: '$BUNDLE_IDENTIFIER'"
+    log "New bundle identifier will be: '$NEW_BUNDLE_IDENTIFIER'"
 
     # Update the CFBundleDisplayName property in the Info.plist if a new name has been provided
     if [ "${DISPLAY_NAME}" != "" ];
@@ -499,10 +539,10 @@ function resign {
     cp -f "$NEW_PROVISION" "$APP_PATH/embedded.mobileprovision"
 
     #if the current bundle identifier is different from the new one in the provisioning profile, then change it.
-    if [ "$CURRENT_BUNDLE_IDENTIFIER" != "$BUNDLE_IDENTIFIER" ];
+    if [ "$CURRENT_BUNDLE_IDENTIFIER" != "$NEW_BUNDLE_IDENTIFIER" ];
     then
-        log "Updating the bundle identifier from '$CURRENT_BUNDLE_IDENTIFIER' to '$BUNDLE_IDENTIFIER'"
-        PlistBuddy -c "Set :CFBundleIdentifier $BUNDLE_IDENTIFIER" "$APP_PATH/Info.plist"
+        log "Updating the bundle identifier from '$CURRENT_BUNDLE_IDENTIFIER' to '$NEW_BUNDLE_IDENTIFIER'"
+        PlistBuddy -c "Set :CFBundleIdentifier $NEW_BUNDLE_IDENTIFIER" "$APP_PATH/Info.plist"
         checkStatus
     fi
 
