@@ -136,7 +136,7 @@ usage() {
     echo -e "\t\t\t\t\t\t\t-b com.example.placeholder.notificationservice=com.example.myapp.notificationservice" >&2
     echo -e "\t\t\t\t\t\t\t-b com.example.placeholder.watchapp=com.example.myapp.watchapp" >&2
     echo -e "" >&2
-    echo -e "\t--use-app-entitlements\t\tExtract app bundle codesigning entitlements and combine with entitlements from new provisioning profile." >&2
+    echo -e "\t--use-app-entitlements\t\t\tExtract app bundle codesigning entitlements and combine with entitlements from new provisioning profile." >&2
     echo -e "\t\t\t\t\t\t\tCan't use together with '-e, --entitlements' option." >&2
     echo -e "\t--keychain-path path\t\t\tSpecify the path to a keychain that /usr/bin/codesign should use." >&2
     echo -e "\t-v, --verbose\t\t\t\tVerbose output." >&2
