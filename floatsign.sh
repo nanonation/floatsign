@@ -244,7 +244,7 @@ for provision in "${RAW_PROVISIONS[@]}"; do
     fi
 done
 
-for bundle_id in "${RAW_BUNDLE_IDS[@]}"; do
+for bundle_id in "${RAW_BUNDLE_IDENTIFIERS[@]}"; do
     if [[ "$bundle_id" =~ .+=.+ ]]; then
         log "Specified new bundle identifier: '${bundle_id#*=}' for existing bundle identifier: '${bundle_id%%=*}'"
     else
@@ -414,7 +414,7 @@ function add_bundle_identifier {
     fi
 }
 
-for ARG in "#{RAW_BUNDLE_IDENTIFIERS[@]}"; do
+for ARG in "${RAW_BUNDLE_IDENTIFIERS[@]}"; do
     add_bundle_identifier "$ARG"
 done
 
@@ -423,7 +423,7 @@ function new_bundle_identifier_for_current_identifier {
 
     for ARG in "${NEW_BUNDLE_IDENTIFIERS_BY_CURRENT_IDENTIFIER[@]}"; do
         if does_bundle_id_match "${ARG%%=*}" "$1" "$2"; then
-            BUNDLE_ID="${ARG#*=}"
+            echo "${ARG#*=}"
             break
         fi
     done
