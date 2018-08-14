@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # shellcheck disable=SC2155
 
 # Copyright (c) 2011 Float Mobile Learning
@@ -429,6 +429,11 @@ function new_bundle_identifier_for_current_identifier {
     done
 }
 
+# replace literal asterisks * in a bundle ID with [*] so that sed doesn't treat them as a wildcard
+function sed_pattern_for_bundle_identifier {
+    echo "${1//[*]/[*]}"
+}
+
 # Resign the given application
 function resign {
 
@@ -852,9 +857,16 @@ function resign {
         # Replace old bundle ID with new bundle ID in patched entitlements
         # Read old bundle ID from the old Info.plist which was saved for this purpose
         OLD_BUNDLE_ID="$(PlistBuddy -c "Print :CFBundleIdentifier" "$TEMP_DIR/oldInfo.plist")"
-        NEW_BUNDLE_ID="$(bundle_id_for_provison "$NEW_PROVISION")"
+        local BUNDLE_ID_FROM_ARGUMENTS=$(new_bundle_identifier_for_current_identifier "$OLD_BUNDLE_ID")
+        local BUNDLE_ID_FROM_PROFILE=$(bundle_id_for_provison "$NEW_PROVISION")
+        log "blah is $BUNDLE_ID_FROM_ARGUMENTS"
+
+        NEW_BUNDLE_ID="${BUNDLE_ID_FROM_ARGUMENTS:-$BUNDLE_ID_FROM_PROFILE}"
         log "Replacing old bundle ID '$OLD_BUNDLE_ID' with new bundle ID '$NEW_BUNDLE_ID' in patched entitlements"
-        sed -i .bak "s/$OLD_BUNDLE_ID/$NEW_BUNDLE_ID/g" "$PATCHED_ENTITLEMENTS"
+        local PATTERN=$(sed_pattern_for_bundle_identifier "$OLD_BUNDLE_ID")
+        sed -i .bak "s/$PATTERN/$NEW_BUNDLE_ID/g" "$PATCHED_ENTITLEMENTS"
+        PATTERN=$(sed_pattern_for_bundle_identifier "$BUNDLE_ID_FROM_PROFILE")
+        sed -i .bak "s/$PATTERN/$NEW_BUNDLE_ID/g" "$PATCHED_ENTITLEMENTS"
 
         log "Resigning application using certificate: '$CERTIFICATE'"
         log "and patched entitlements:"
