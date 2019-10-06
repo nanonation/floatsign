@@ -15,7 +15,7 @@ A bash script to re-sign iOS applications with Ad-Hoc or Enterprise distribution
 
 This script appears to have originated from [Float Mobile Learning](http://www.floatlearning.com/) in 2011, and has been been circulating around as a Gist, revised through by various commentors and re-gisted over the years.
 
-We are posting our tweaked version of [this Gist](https://gist.github.com/Weptun/5406993) in this repository. Our initial changes were to add support for re-signing embedded iOS 8 frameworks, as well as incorporating a change to update the <key>com.apple.developer.team-identifier</key> in the entitlements as suggested in the comments of the referenced gist. 
+We are posting our tweaked version of [this Gist](https://gist.github.com/Weptun/5406993) in this repository. Our initial changes were to add support for re-signing embedded iOS 8 frameworks, as well as incorporating a change to update the <key>com.apple.developer.team-identifier</key> in the entitlements as suggested in the comments of the referenced gist.
 
 Issues and pull requests with changes/fixes are welcomed.
 
